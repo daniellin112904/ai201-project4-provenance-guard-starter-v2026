@@ -204,6 +204,8 @@ def submit():
     """
     import uuid
     import detector
+    import stylometry
+    import scoring
 
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -236,9 +238,11 @@ def submit():
     # Signal one only, for now (Milestone 3).
     model_score = detector.model_signal(text)
 
-    # Placeholders until Milestones 4 and 5.
-    style_score = None
-    combined_score = None
+    # Signal two and the combining rule (Milestone 4).
+    style_score = stylometry.style_signal(text)
+    combined_score = scoring.combine_signals(model_score, style_score)
+
+    # Placeholders until Milestone 5.
     guess = "unsure"
     label = "placeholder"
 

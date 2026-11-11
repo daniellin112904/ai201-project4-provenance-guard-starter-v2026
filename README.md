@@ -121,19 +121,35 @@ Missing fields return 400; an unknown `content_id` returns 404.
 
 ### The combining rule
 
-<!-- Write the rule in words, then give the numbers. What happens when the two
-     signals disagree? -->
+**The rule:** A weighted average that leans on the style signal, plus a disagreement rule. If the two signals differ by more than 0.3, they disagree, and the combined score is set to 0.5, inside the unsure band, no matter which way the average would have leaned. Two methods disagreeing is uncertainty, so a sharp disagreement can produce neither a confident AI label nor a confident human label. I would rather the system admit it isn't sure than confidently give the wrong label in either direction.
 
-**The rule:**
+I weighted the style signal more heavily because, on my test inputs, the model signal scored my own formal research writing (0.844) higher than real AI text (0.784), while the style signal scored it lower (0.693). Leaning on the style signal reduces the pull toward accusing formal human writers. The cost is that real AI text scores lower too.
 
-**The numbers:**
+**The numbers:** (all in `config.py`)
+
+| Setting               | Value |
+| --------------------- | ----- |
+| `WEIGHT_MODEL_SIGNAL` | 0.3   |
+| `WEIGHT_STYLE_SIGNAL` | 0.7   |
+| `DISAGREEMENT_GAP`    | 0.3   |
+| `DISAGREEMENT_SCORE`  | 0.5   |
+| `AI_THRESHOLD`        | 0.85  |
 
 **Where it lives:** `scoring.py::combine_signals`
 
-<!-- ⚠️ The grader checks your code against that line. If your rule lives
-     somewhere else, say where. -->
+**The test inputs** (from `test_inputs.py`, run against the live `/submit` route):
 
-**A case where my two signals split, and what my rule does with it:**
+| Input                                   | Model | Style | Gap   | Combined |
+| --------------------------------------- | ----- | ----- | ----- | -------- |
+| Clearly AI (unedited chatbot paragraph) | 0.784 | 0.636 | 0.147 | 0.680    |
+| Clearly human (my casual message)       | 0.518 | 0.433 | 0.085 | 0.458    |
+| Formal human (my research writing)      | 0.844 | 0.693 | 0.151 | 0.738    |
+| Lightly edited AI (casual rewrite)      | 0.359 | 0.176 | 0.183 | 0.231    |
+| AI, punctuation only (same words)       | 0.642 | 0.000 | 0.642 | 0.500    |
+
+**A case where my two signals split, and what my rule does with it:** The "AI, punctuation only" input keeps the clearly-AI paragraph's exact words but changes only its punctuation and sentence breaks: one sentence split in two, a question, an exclamation mark, a colon and a semicolon. The model signal, which reads word choice, still found it fairly predictable at 0.642. The style signal, which reads shape, saw varied sentences and varied punctuation and scored it 0.000, fully human. A plain 30/70 average gave 0.193, which would have read as a confident human label for text that is entirely AI, produced by a ten-second trick. My first version of the rule only capped disagreements on the way up, to protect writers from accusations, so it missed this. I made it symmetric: a gap of 0.642 is well past 0.3, so the score is set to 0.5 and the label is "unsure".
+
+**What the rule can't fix:** It only helps when the signals disagree. When both are fooled the same way, there's nothing for it to catch. My formal research writing still scores above real AI text, because both signals read formal writing as machine-like. And the lightly edited AI text scores 0.231, lower than my genuine casual message, because a casual rewrite raised the model signal's perplexity and changed the shape the style signal reads at the same time. I also found that word variety barely discriminates on short texts: all my inputs scored between 0.88 and 0.92, and the AI paragraph had the most varied vocabulary, the opposite of what I expected.
 
 ---
 

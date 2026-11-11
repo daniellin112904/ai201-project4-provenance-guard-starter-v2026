@@ -52,11 +52,19 @@ def combine_signals(model_score: float, style_score: float) -> float:
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
     """
-    # TODO: replace this
-    return (
+    # Rule: a 30/70 weighted average leaning on the style signal, because the
+    # model signal scored my own formal writing higher than real AI text.
+    # When the two signals differ by more than DISAGREEMENT_GAP, they disagree,
+    # and two methods disagreeing is uncertainty: the score is set to
+    # DISAGREEMENT_SCORE, inside the unsure band, in either direction. A sharp
+    # disagreement can produce neither a confident AI nor a confident human label.
+    if abs(model_score - style_score) > config.DISAGREEMENT_GAP:
+        return config.DISAGREEMENT_SCORE
+    combined = (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score
     )
+    return round(min(max(combined, 0.0), 1.0), 4)
 
 
 def score_to_label(score: float) -> tuple[str, str]:
