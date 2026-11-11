@@ -242,9 +242,8 @@ def submit():
     style_score = stylometry.style_signal(text)
     combined_score = scoring.combine_signals(model_score, style_score)
 
-    # Placeholders until Milestone 5.
-    guess = "unsure"
-    label = "placeholder"
+    # The label a writer sees (Milestone 5).
+    guess, label = scoring.score_to_label(combined_score)
 
     audit.log_decision(
         content_id=content_id,
@@ -271,31 +270,43 @@ def submit():
 @app.post("/appeal")
 def appeal():
     """
-    A writer says you got it wrong. ← TODO — Milestone 5
-
-    Expects JSON:
-        {"content_id": "...", "reasoning": "..."}
-
-    Should:
-      1. Check the content_id actually exists — `audit.entries_for(id)` tells
-         you. A typo here fails silently and looks like a broken endpoint,
-         which is the single most common way this milestone eats an hour.
-      2. Record the appeal with `audit.log_appeal(...)`, which moves the item
-         to `under_review`.
-      3. Confirm to the writer. No automatic re-checking needed.
-
-    This is the smallest endpoint in the project and the one that matters most
-    to the person on the other end. It's the only thing standing between a
-    wrong accusation and nothing at all.
+    A writer says we got it wrong. Record their reasoning beside the original
+    decision and move the item to under_review. Nothing is re-scored.
     """
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
 
-    # TODO: delete this and build the route.
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({"error": "bad_input", "message": "content_id is required"}), 400
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({"error": "bad_input", "message": "reasoning is required"}), 400
+
+    # The original decision must exist. Appeals and rejections don't count.
+    decisions = [
+        e for e in audit.entries_for(content_id)
+        if e.get("status") == "decided" and "event" not in e
+    ]
+    if not decisions:
+        return jsonify({
+            "error": "not_found",
+            "message": f"No submission found with content_id {content_id}",
+        }), 404
+
+    original = decisions[-1]
+    audit.log_appeal(
+        content_id=content_id,
+        creator_id=original.get("creator_id", "unknown"),
+        reasoning=reasoning,
+    )
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Your appeal has been recorded. A person will review this decision.",
+    })
 
 
 # ── Already works ─────────────────────────────────────────────────────────────

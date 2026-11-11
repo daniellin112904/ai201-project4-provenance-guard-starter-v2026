@@ -33,10 +33,19 @@ INPUTS = {
         "adopt these technologies, it is important to consider both the benefits and the "
         "potential challenges they present: economic, social; and ethical."
     ),
+    "very casual human": (
+        "ok wait. did u see the game last night?? no way they blew a 20 point lead, i was "
+        "screaming. anyway (unrelated) the bus was late AGAIN: 25 min. im so done; see u at 6!"
+    ),
+    "repetitive AI-style": (
+        "The system is designed to improve efficiency. The system is designed to improve "
+        "accuracy. The system is designed to improve reliability. The system is designed to "
+        "improve performance. The system is designed to improve efficiency."
+    ),
 }
 
-print(f"{'input':<20} {'model':>7} {'style':>7} {'gap':>6} {'combined':>9}")
+print(f"{'input':<20} {'model':>7} {'style':>7} {'gap':>6} {'combined':>9}  guess")
 for name, text in INPUTS.items():
     r = requests.post(URL, json={"text": text, "creator_id": "test-m4"}, timeout=60).json()
     gap = abs(r["model_score"] - r["style_score"])
-    print(f"{name:<20} {r['model_score']:>7.3f} {r['style_score']:>7.3f} {gap:>6.3f} {r['confidence']:>9.3f}")
+    print(f"{name:<20} {r['model_score']:>7.3f} {r['style_score']:>7.3f} {gap:>6.3f} {r['confidence']:>9.3f}  {r['guess']}")

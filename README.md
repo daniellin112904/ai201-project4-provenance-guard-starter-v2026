@@ -160,13 +160,15 @@ I weighted the style signal more heavily because, on my test inputs, the model s
 
      Write them for someone who has never heard the word "threshold". -->
 
-| Label                 | Score range | The exact text a reader sees |
-| --------------------- | ----------- | ---------------------------- |
-| high-confidence human |             |                              |
-| unsure                |             |                              |
-| high-confidence AI    |             |                              |
+| Label                 | Score range     | The exact text a reader sees                                                                                                                                                                                            |
+| --------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| high-confidence human | below 0.20      | "This writing appears to have been written by a person, with little indication of AI involvement. However, this result is not a guarantee."                                                                             |
+| unsure                | 0.20 up to 0.85 | "We couldn't confidently determine whether this writing was created by a person or AI. This does not mean your writing is AI-generated, only that our system doesn't have enough evidence to make a reliable decision." |
+| high-confidence AI    | 0.85 and above  | "This writing shows strong signs of being AI-generated. However, this is only an estimate and does not necessarily mean AI was used. If you believe this result is incorrect, you can submit an appeal."                |
 
-**Why I worded the "unsure" one this way:**
+The thresholds live in `config.py` (`HUMAN_THRESHOLD = 0.20`, `AI_THRESHOLD = 0.85`) and the label text in `scoring.py::score_to_label`. All three are reachable. From `test_inputs.py`: a very casual message full of slang and mixed punctuation scored 0.125 (human), a deliberately repetitive paragraph scored 0.994 (AI), and everything else, including real AI text and my own normal writing, landed in unsure. Each confident label takes fairly extreme text to reach, which is the design: a confident label in either direction has to be earned.
+
+**Why I worded the "unsure" one this way:** Most genuine writers will see this label. My own casual message (0.458) and my own research writing (0.738) both land here. So it's written for someone who wrote every word themselves. It says plainly that it is not an accusation ("This does not mean your writing is AI-generated") and puts the uncertainty on the system, not the writer ("our system doesn't have enough evidence"). I avoided anything that sounds like a warning or a partial verdict, because a reader who sees "we couldn't tell" next to their own work will otherwise assume the worst.
 
 <!-- It's the hardest of the three. It has to admit uncertainty without
      sounding like an accusation, because the person reading it may well have
@@ -176,47 +178,98 @@ I weighted the style signal more heavily because, on my test inputs, the model s
 
 ## Sample Run
 
-<!-- One submission and one appeal, pasted as text: the request, the response,
-     and the log entries. -->
-
 **A submission**
 
-<!-- The response needs content_id, guess, confidence, label, AND both
-     signal scores - model_score and style_score. Unit 8's tools read those
-     two off the response, so leaving them out costs you next unit's
-     diagnostics. -->
-
-```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
-  -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+```
+$ curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{\"text\": \"One of the biggest challenges I faced during my research project was working with a limited amount of training data. To address this, I experimented with different preprocessing techniques and compared the performance of multiple neural network models.\", \"creator_id\": \"daniel\"}'
 ```
 
 ```json
-
+{
+  "confidence": 0.7369,
+  "content_id": "fa6ba504-baf9-493f-8f87-687b983402f8",
+  "guess": "unsure",
+  "label": "We couldn't confidently determine whether this writing was created by a person or AI. This does not mean your writing is AI-generated, only that our system doesn't have enough evidence to make a reliable decision.",
+  "model_score": 0.8189,
+  "status": "decided",
+  "style_score": 0.7018
+}
 ```
+
+This is my own writing. Both signals read it as fairly machine-like, but at 0.737 it stays under the 0.85 AI threshold, so it gets "unsure" rather than an accusation.
 
 **An appeal**
 
-```bash
-$ curl -X POST http://127.0.0.1:5000/appeal \
-  -H "Content-Type: application/json" \
-  -d '{"content_id": "...", "reasoning": "..."}'
+```
+$ curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"fa6ba504-baf9-493f-8f87-687b983402f8\", \"reasoning\": \"I wrote this myself for my research project write-up.\"}'
 ```
 
 ```json
+{
+  "content_id": "fa6ba504-baf9-493f-8f87-687b983402f8",
+  "message": "Your appeal has been recorded. A person will review this decision.",
+  "status": "under_review"
+}
+```
 
+An appeal on a `content_id` that doesn't exist returns 404:
+
+```
+$ curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"does-not-exist\", \"reasoning\": \"test\"}'
+```
+
+```json
+{
+  "error": "not_found",
+  "message": "No submission found with content_id does-not-exist"
+}
 ```
 
 **What the log shows afterwards**
 
-```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+```
+$ curl.exe "http://127.0.0.1:5000/log?limit=3"
 ```
 
 ```json
-
+{
+  "count": 3,
+  "entries": [
+    {
+      "combined_score": 0.9942,
+      "content_id": "ec2b7e02-14d5-4f9e-bfd3-625de154e080",
+      "creator_id": "test-m4",
+      "guess": "ai",
+      "label": "This writing shows strong signs of being AI-generated. However, this is only an estimate and does not necessarily mean AI was used. If you believe this result is incorrect, you can submit an appeal.",
+      "model_score": 0.9808,
+      "status": "decided",
+      "style_score": 1.0,
+      "timestamp": "2026-11-11T05:31:38+00:00"
+    },
+    {
+      "combined_score": 0.7369,
+      "content_id": "fa6ba504-baf9-493f-8f87-687b983402f8",
+      "creator_id": "daniel",
+      "guess": "unsure",
+      "label": "We couldn't confidently determine whether this writing was created by a person or AI. This does not mean your writing is AI-generated, only that our system doesn't have enough evidence to make a reliable decision.",
+      "model_score": 0.8189,
+      "status": "decided",
+      "style_score": 0.7018,
+      "timestamp": "2026-11-11T05:34:15+00:00"
+    },
+    {
+      "content_id": "fa6ba504-baf9-493f-8f87-687b983402f8",
+      "creator_id": "daniel",
+      "event": "appeal",
+      "reasoning": "I wrote this myself for my research project write-up.",
+      "status": "under_review",
+      "timestamp": "2026-11-11T05:35:59+00:00"
+    }
+  ]
+}
 ```
+
+The original decision for `fa6ba504...` is still in the log exactly as it was, and the appeal sits after it with the writer's reasoning and the new `under_review` status. The log is append-only, so the order shows what was decided and when it was challenged.
 
 ---
 

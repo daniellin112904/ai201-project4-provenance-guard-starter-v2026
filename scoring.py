@@ -93,12 +93,22 @@ def score_to_label(score: float) -> tuple[str, str]:
     think if they got it on their own work. That question is the whole
     milestone.
     """
-    # TODO: replace this — thresholds are in config.py
     if score >= config.AI_THRESHOLD:
-        return "ai", "PLACEHOLDER — write the high-confidence AI label."
-    if score <= config.HUMAN_THRESHOLD:
-        return "human", "PLACEHOLDER — write the high-confidence human label."
-    return "unsure", "PLACEHOLDER — write the unsure label."
+        return "ai", (
+            "This writing shows strong signs of being AI-generated. However, this "
+            "is only an estimate and does not necessarily mean AI was used. If you "
+            "believe this result is incorrect, you can submit an appeal."
+        )
+    if score < config.HUMAN_THRESHOLD:
+        return "human", (
+            "This writing appears to have been written by a person, with little "
+            "indication of AI involvement. However, this result is not a guarantee."
+        )
+    return "unsure", (
+        "We couldn't confidently determine whether this writing was created by a "
+        "person or AI. This does not mean your writing is AI-generated, only that "
+        "our system doesn't have enough evidence to make a reliable decision."
+    )
 
 
 def label_ranges() -> list[tuple[str, str]]:
