@@ -277,15 +277,17 @@ The original decision for `fa6ba504...` is still in the log exactly as it was, a
 
 **Moment 1**
 
-- _What I asked for:_
-- _What came back:_
-- _What I changed:_
+- _What I asked for:_ Help turning my three style features (sentence length spread, word variety, punctuation) into working code in `stylometry.py`.
+- _What came back:_ Claude wrote the three measures and `style_signal`, including a moving-average type-token ratio to deal with the length problem I'd named in my blind spot, and calibration ranges it marked as guesses to check. When I ran it on my three test texts, word variety scored between 0.88 and 0.92 for all of them, so it barely discriminated, and the AI paragraph had the most varied vocabulary of the three, the opposite of my hypothesis.
+- _What I changed:_ I didn't tune the ranges to make three samples come out the way I wanted. I kept the measure, recorded that it doesn't discriminate on short texts as a finding, and leaned on the evidence that sentence length spread was the feature actually separating casual writing from formal writing.
 
 **Moment 2**
 
-- _What I asked for:_
-- _What came back:_
-- _What I changed:_
+- _What I asked for:_ Help testing my combining rule and choosing the human threshold.
+- _What came back:_ Claude suggested building an input that would split the two signals: the AI paragraph with its exact words but only the punctuation changed. It scored 0.642 on the model signal and 0.000 on the style signal, and my first rule, which only capped disagreements on the way up, let it through at 0.193, a confident human label for AI text. Later, when we discussed the human threshold, Claude used 0.25 as an example of a stricter setting.
+- _What I changed:_ I decided the disagreement rule had to be symmetric, so any gap over 0.3 sets the score to 0.5 and the label to unsure in either direction. For the threshold, I noticed that 0.25 wouldn't actually stop my lightly edited AI text, which scored 0.231, so I set the human threshold to 0.20 instead.
+
+**Who wrote what:** I made the design decisions: both signals' features and directions, the 30/70 weighting, the symmetric disagreement rule, both thresholds, all five criteria, and the label wording. Claude wrote most of the code to implement them (`stylometry.py`, the `/submit` and `/appeal` routes, and `test_inputs.py`), explained test results, and checked whether each criterion could be verified by someone else.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
