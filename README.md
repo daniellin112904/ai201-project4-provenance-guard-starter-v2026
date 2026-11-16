@@ -295,26 +295,24 @@ The original decision for `fa6ba504...` is still in the log exactly as it was, a
 
 ## Rate Limiting
 
-**My limits:** **_ per minute, _** per day
+**My limits:** 8 per minute, 100 per day, on `POST /submit` (`config.py`: `RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_PER_DAY`).
 
-**Why those numbers and not others:**
+**Why those numbers and not others:** A real writer submits their own work a few times an hour, and might resubmit several times in a row while revising a draft. 8 a minute leaves room for a burst of revisions without blocking them. 100 a day is far more than a writer needs, but stops a script sending thousands of variations to map where my 0.20 and 0.85 thresholds sit. These limits slow probing rather than prevent it: a careful script doesn't need thousands of tries, since a binary search can locate a threshold in roughly 10 to 20 well-chosen submissions, which fits inside 100 a day. The per-minute limit mostly forces an attacker to be patient.
 
-<!-- Think about two people: a real writer submitting their own work a few
-     times an hour, and a script sending a thousand variations to map your
-     thresholds. Your numbers have to be liveable for the first and hostile to
-     the second. -->
-
-**What a caller counts as:** <!-- per address, or per creator_id? They fail
-differently — one script can look like a thousand callers, and one household
-can look like one. -->
+**What a caller counts as:** The `creator_id` in the request, falling back to the caller's address when there isn't a usable one. This is what the starter's `rate_limit_key` in `app.py` does. The weakness is that `creator_id` is whatever the caller sends: a script that changes it on every request looks like a thousand different writers and is never limited. Per-address limiting fails the other way, since a whole household or school network behind one address would share one budget.
 
 **The run of status codes when I pushed past it:**
 
-<!-- python run_attacks.py --flood 15 -->
+```
+$ python run_attacks.py --flood 15
+15 submissions as 'flood_tester' against http://127.0.0.1:5000
 
+200 200 200 200 200 200 200 200 429 429 429 429 429 429 429
+
+7 of 15 were rate limited.
 ```
 
-```
+The first 8 succeed and every request after that in the same minute gets a 429. Each rejection is written to the audit log by the starter's 429 handler, and inputs my own route refuses (missing, empty, non-string or oversized text, or a missing `creator_id`) are logged as rejections by `submit()` with `audit.log_rejection`.
 
 ---
 
