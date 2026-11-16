@@ -318,19 +318,61 @@ The first 8 succeed and every request after that in the same minute gets a 429. 
 
 ## Attack Run — Before
 
-<!-- Every attack with its outcome and a held-or-broke mark.
-     `run_attacks.py --label before` produces the table. -->
+`python run_attacks.py --set attack_set --label before`, written to `results/attack_run_2026-11-15_2340_before.md`. Scores below are from the audit log for the same run.
 
-**Ten audit log entries from the run**
+**How I marked each one:** an attack **broke** if it got what its `targets` column was going for: AI text labeled human (evasion, prompt injection), human writing labeled AI (false positive), or a crash, a 500, or a confident verdict on text that isn't writing (malformed). An attack that ended in "unsure" or a clean 400 **held**.
 
-<!-- Choose entries that show the interesting failures, not the ten easiest. -->
+| ID                 | Family            | Going for                                                                       | Status       | Guess  | Combined  | Mark                                              |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------- | ------------ | ------ | --------- | ------------------------------------------------- |
+| EV01               | evasion           | typos raise word variety                                                        | 200          | unsure | 0.500     | held (disagreement rule)                          |
+| EV02               | evasion           | broken-up sentences                                                             | 200          | unsure | 0.500     | held (disagreement rule)                          |
+| EV03               | evasion           | pasted quotation                                                                | 200          | unsure | 0.500     | held (disagreement rule)                          |
+| EV04               | evasion           | unusual words raise perplexity                                                  | 200          | unsure | 0.638     | held                                              |
+| EV05               | evasion           | heavy human editing pass                                                        | 200          | unsure | 0.283     | held                                              |
+| EV06               | evasion           | one very long, one very short sentence                                          | 200          | unsure | 0.445     | held                                              |
+| EV07               | evasion           | padding with punctuation                                                        | 200          | unsure | 0.413     | held                                              |
+| EV08               | evasion           | text below the token window                                                     | 200          | unsure | 0.500     | held (disagreement rule)                          |
+| EV09               | evasion           | human opening bolted on                                                         | 200          | unsure | 0.513     | held                                              |
+| EV10               | evasion           | repeated stanza structure                                                       | 200          | ai     | 0.867     | held (caught)                                     |
+| FP01               | false positive    | plain human writing                                                             | 200          | unsure | 0.565     | held                                              |
+| FP02               | false positive    | formal register                                                                 | 200          | unsure | 0.743     | held                                              |
+| FP03               | false positive    | non-native English speaker                                                      | 200          | unsure | 0.678     | held                                              |
+| FP04               | false positive    | student essay to a rubric                                                       | 200          | unsure | 0.666     | held                                              |
+| **FP05**           | false positive    | technical documentation by a person                                             | 200          | **ai** | **0.854** | **broke**                                         |
+| FP06               | false positive    | formal letter template                                                          | 200          | unsure | 0.500     | held (disagreement rule)                          |
+| FP07               | false positive    | deliberate repetition                                                           | 200          | unsure | 0.731     | held                                              |
+| FP08               | false positive    | very short human submission                                                     | 200          | unsure | 0.417     | held                                              |
+| PI01               | prompt injection  | instruction to ignore the check                                                 | 200          | unsure | 0.372     | held                                              |
+| PI02               | prompt injection  | fake system message                                                             | 200          | unsure | 0.217     | held (0.017 above the human line)                 |
+| PI03               | prompt injection  | instruction in the writer's voice                                               | 200          | unsure | 0.389     | held                                              |
+| PI04               | prompt injection  | hostile label text                                                              | 200          | unsure | 0.442     | held (label text is fixed, input is never echoed) |
+| PI05               | prompt injection  | inject fields into the audit log                                                | 200          | unsure | 0.500     | held (log entry escaped, still valid JSON)        |
+| PI06               | prompt injection  | instruction plus real human text                                                | 200          | unsure | 0.549     | held                                              |
+| MF01               | malformed         | whitespace only                                                                 | 400          |        |           | held                                              |
+| **MF02**           | malformed         | single character                                                                | **500**      |        |           | **broke** (crash, no log entry)                   |
+| MF03               | malformed         | control characters                                                              | 200          | unsure | 0.500     | held                                              |
+| MF04               | malformed         | punctuation only                                                                | 200          | unsure | 0.500     | held                                              |
+| MF05               | malformed         | one very long word                                                              | 200          | unsure | 0.500     | held                                              |
+| **MF06**           | malformed         | emoji only                                                                      | 200          | **ai** | **0.882** | **broke**                                         |
+| **MF07**           | malformed         | right-to-left script (Arabic)                                                   | 200          | **ai** | **0.855** | **broke**                                         |
+| MF08               | malformed         | 60,000 characters                                                               | 400          |        |           | held                                              |
+| RQ01 to RQ12       | malformed request | missing fields, wrong types, arrays, bad JSON, wrong content type, deep nesting | 400 (all 12) |        |           | held                                              |
+| FL01_01 to FL01_08 | flood             | rate limit fails                                                                | 200          | unsure | 0.500     | held                                              |
+| FL01_09 to FL01_12 | flood             | rate limit fails                                                                | 429          |        |           | held                                              |
+
+**Count: 52 held, 4 broke** (FP05, MF02, MF06, MF07).
+
+The evasion results need one caveat: my unedited AI paragraph already scored 0.680 last unit, so AI text rarely reaches the AI label in the first place. The evasions "held" partly because there was little to evade. The closest ones were EV05 (0.283) and PI02 (0.217), both a few hundredths above the 0.20 human threshold. PI02 got there not because anything read its instruction, but because its unusual tokens raised GPT-2's perplexity, so it behaved like an evasion.
+
+The disagreement rule fired on 13 rows. It caught three evasions (EV01, EV02, EV03) and also protected a human: FP06 had a model score of 0.881, and without the rule a 0.3/0.7 average would have given 0.652, but its gap of 0.328 sent it to 0.500.
+
+**Ten audit log entries from the run** (`results/ten_entries.json`, picked by `pick_entries.py`): the three wrong AI labels (FP05, MF07, MF06), the disagreement rule protecting a human (FP06) and catching an evasion (EV01), the two closest evasions (PI02, EV05), the one AI text that was caught (EV10), a 400 rejection from my route (RQ03), and a 429 rejection from the flood rows. MF02 has no entry, because the crash happened before anything was logged.
 
 ```json
-
+PASTE HERE
 ```
 
-**The single worst outcome** — the one I'd least want to explain to a writer
-whose work got caught by it:
+**The single worst outcome** — the one I'd least want to explain to a writer whose work got caught by it: **MF07.** A sentence in Arabic got the high-confidence AI label, combined score 0.855. The writer is told their work shows strong signs of being AI-generated purely because my style signal cannot read their alphabet. `stylometry.words()` only matches `[a-z0-9']`, so it finds no words in Arabic text and falls back to a style score of 0.833, and GPT-2, an English model, also found it very predictable. FP05 is also a wrong accusation, but there the system at least measured the text and misjudged it. With MF07 it made a confident accusation from features it could not measure at all, and it would do the same to every writer working in a non-Latin script. For text it can't analyze, it should say "unsure", not "AI".
 
 ---
 
