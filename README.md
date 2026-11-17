@@ -369,7 +369,111 @@ The disagreement rule fired on 13 rows. It caught three evasions (EV01, EV02, EV
 **Ten audit log entries from the run** (`results/ten_entries.json`, picked by `pick_entries.py`): the three wrong AI labels (FP05, MF07, MF06), the disagreement rule protecting a human (FP06) and catching an evasion (EV01), the two closest evasions (PI02, EV05), the one AI text that was caught (EV10), a 400 rejection from my route (RQ03), and a 429 rejection from the flood rows. MF02 has no entry, because the crash happened before anything was logged.
 
 ```json
-PASTE HERE
+[
+  {
+    "timestamp": "2026-11-16T04:40:03+00:00",
+    "content_id": "269d27a3-f4dd-42f5-9503-e166ee2d8acf",
+    "creator_id": "attacker_FP05",
+    "guess": "ai",
+    "model_score": 0.8005,
+    "style_score": 0.8774,
+    "combined_score": 0.8543,
+    "label": "This writing shows strong signs of being AI-generated. However, this is only an estimate and does not necessarily mean AI was used. If you believe this result is incorrect, you can submit an appeal.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:06+00:00",
+    "content_id": "045d61c9-fbf9-4f64-8c0c-411969dfdf81",
+    "creator_id": "attacker_MF07",
+    "guess": "ai",
+    "model_score": 0.9064,
+    "style_score": 0.8333,
+    "combined_score": 0.8552,
+    "label": "This writing shows strong signs of being AI-generated. However, this is only an estimate and does not necessarily mean AI was used. If you believe this result is incorrect, you can submit an appeal.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:06+00:00",
+    "content_id": "39d0d746-a179-4abb-b52f-7d77b1131c7a",
+    "creator_id": "attacker_MF06",
+    "guess": "ai",
+    "model_score": 0.9969,
+    "style_score": 0.8333,
+    "combined_score": 0.8824,
+    "label": "This writing shows strong signs of being AI-generated. However, this is only an estimate and does not necessarily mean AI was used. If you believe this result is incorrect, you can submit an appeal.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:03+00:00",
+    "content_id": "5c2d3612-17b2-4c42-a12b-356ba5fe225c",
+    "creator_id": "attacker_FP06",
+    "guess": "unsure",
+    "model_score": 0.8814,
+    "style_score": 0.5532,
+    "combined_score": 0.5,
+    "label": "We couldn't confidently determine whether this writing was created by a person or AI. This does not mean your writing is AI-generated, only that our system doesn't have enough evidence to make a reliable decision.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:01+00:00",
+    "content_id": "2f03fa6c-1339-46db-ada7-db6a9e479b36",
+    "creator_id": "attacker_EV01",
+    "guess": "unsure",
+    "model_score": 0.1635,
+    "style_score": 0.6587,
+    "combined_score": 0.5,
+    "label": "We couldn't confidently determine whether this writing was created by a person or AI. This does not mean your writing is AI-generated, only that our system doesn't have enough evidence to make a reliable decision.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:04+00:00",
+    "content_id": "1063767e-d8ad-4a7e-ae15-461ca97677a6",
+    "creator_id": "attacker_PI02",
+    "guess": "unsure",
+    "model_score": 0.2044,
+    "style_score": 0.2222,
+    "combined_score": 0.2169,
+    "label": "We couldn't confidently determine whether this writing was created by a person or AI. This does not mean your writing is AI-generated, only that our system doesn't have enough evidence to make a reliable decision.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:02+00:00",
+    "content_id": "088ef66b-cf60-4923-9179-916111f4fa2c",
+    "creator_id": "attacker_EV05",
+    "guess": "unsure",
+    "model_score": 0.3212,
+    "style_score": 0.2674,
+    "combined_score": 0.2835,
+    "label": "We couldn't confidently determine whether this writing was created by a person or AI. This does not mean your writing is AI-generated, only that our system doesn't have enough evidence to make a reliable decision.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:03+00:00",
+    "content_id": "f0c919b9-2e1a-4453-8404-432671ae29dc",
+    "creator_id": "attacker_EV10",
+    "guess": "ai",
+    "model_score": 0.9792,
+    "style_score": 0.8193,
+    "combined_score": 0.8673,
+    "label": "This writing shows strong signs of being AI-generated. However, this is only an estimate and does not necessarily mean AI was used. If you believe this result is incorrect, you can submit an appeal.",
+    "status": "decided"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:06+00:00",
+    "creator_id": "attacker_RQ03",
+    "event": "rejected",
+    "status": "rejected",
+    "reason": "text must be a string"
+  },
+  {
+    "timestamp": "2026-11-16T04:40:06+00:00",
+    "creator_id": "attacker_flood",
+    "event": "rejected",
+    "status": "rejected",
+    "reason": "rate_limited",
+    "limit": "8 per 1 minute"
+  }
+]
 ```
 
 **The single worst outcome** — the one I'd least want to explain to a writer whose work got caught by it: **MF07.** A sentence in Arabic got the high-confidence AI label, combined score 0.855. The writer is told their work shows strong signs of being AI-generated purely because my style signal cannot read their alphabet. `stylometry.words()` only matches `[a-z0-9']`, so it finds no words in Arabic text and falls back to a style score of 0.833, and GPT-2, an English model, also found it very predictable. FP05 is also a wrong accusation, but there the system at least measured the text and misjudged it. With MF07 it made a confident accusation from features it could not measure at all, and it would do the same to every writer working in a non-Latin script. For text it can't analyze, it should say "unsure", not "AI".
@@ -480,7 +584,9 @@ Appeals, from `appeal_eval.py::run_trial` (trial 1):
 
 **MF06 and MF07: emoji and Arabic labeled AI (0.882 and 0.855). One cause.** Both got a style score of exactly 0.833. `stylometry.words()` only matches `[a-z0-9']`, so it finds zero words in emoji or Arabic text. Word variety and punctuation both come out as 0 humanness, sentence spread falls back to a neutral 0.5, and (0.5 + 0 + 0) / 3 = 0.167 humanness gives a style score of 0.833. Signal two can't measure this text, and it reports "can't measure" as "looks like AI." Signal one is an English model, and it was also confident on both (0.997 and 0.906), so the signals agreed and the disagreement rule couldn't step in. The route also never checks whether the text has anything signal two can read before scoring it.
 
-## **MF02: one character crashed with a 500 and left no log entry.** `app.py::submit` rejects missing, empty, non-string, and oversized text, but nothing too short to score. One character passes validation, `detector.model_signal` raises a `ValueError` because there isn't enough text to measure, and nothing in the route catches it. Flask returns a 500, and because the error happens before `audit.log_decision` runs, the request leaves no record. A writer gets a server error and nobody can tell afterwards that it happened.
+**MF02: one character crashed with a 500 and left no log entry.** `app.py::submit` rejects missing, empty, non-string, and oversized text, but nothing too short to score. One character passes validation, `detector.model_signal` raises a `ValueError` because there isn't enough text to measure, and nothing in the route catches it. Flask returns a 500, and because the error happens before `audit.log_decision` runs, the request leaves no record. A writer gets a server error and nobody can tell afterwards that it happened.
+
+---
 
 ## The Improvement
 
