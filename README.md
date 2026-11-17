@@ -287,7 +287,19 @@ The original decision for `fa6ba504...` is still in the log exactly as it was, a
 - _What came back:_ Claude suggested building an input that would split the two signals: the AI paragraph with its exact words but only the punctuation changed. It scored 0.642 on the model signal and 0.000 on the style signal, and my first rule, which only capped disagreements on the way up, let it through at 0.193, a confident human label for AI text. Later, when we discussed the human threshold, Claude used 0.25 as an example of a stricter setting.
 - _What I changed:_ I decided the disagreement rule had to be symmetric, so any gap over 0.3 sets the score to 0.5 and the label to unsure in either direction. For the threshold, I noticed that 0.25 wouldn't actually stop my lightly edited AI text, which scored 0.231, so I set the human threshold to 0.20 instead.
 
-**Who wrote what:** I made the design decisions: both signals' features and directions, the 30/70 weighting, the symmetric disagreement rule, both thresholds, all five criteria, and the label wording. Claude wrote most of the code to implement them (`stylometry.py`, the `/submit` and `/appeal` routes, and `test_inputs.py`), explained test results, and checked whether each criterion could be verified by someone else.
+**Moment 3 (Unit 8)**
+
+- _What I asked for:_ Help finding my own writing for criteria 1 and 2, and scripts to test appeals and pull scores from the audit log.
+- _What came back:_ Claude searched my past chats and Google Drive. It pulled casual messages I'd typed, an email I sent the CS department, and answers I gave during my projects, and it left out anything it had drafted or rewritten for me, since that wouldn't be my writing. It also wrote the five chatbot responses for criterion 3, plus `appeal_eval.py` and `eval_scores.py`. The first version of `eval_scores.py` assumed `run_eval.py` numbers pieces from 0, so piece 0 came back empty and the script crashed.
+- _What I changed:_ The empty piece and the crash showed the numbering starts at 1, so the script was fixed to match. I also caught that PowerShell's `>` had saved two results files as UTF-16, which is why my ten audit entries hadn't made it into this README, and converted them to UTF-8.
+
+**Moment 4 (Unit 8)**
+
+- _What I asked for:_ Help diagnosing my failures and choosing the one improvement.
+- _What came back:_ Claude had me print each signal's score for every failure, which showed signal two was behind four of the five. It then suggested breaking signal two into its three features, which showed word variety couldn't tell the chatbot text from my casual messages. It laid out three options for the one change and recommended making signal two neutral on unreadable text.
+- _What I changed:_ I chose that option because it fixed MF07, the outcome I'd already named as the worst, and MF06, which had the same cause. I kept the fix narrow so it wouldn't move any score it wasn't meant to, and checked that it didn't: every other attack and all five criteria scored the same as before.
+
+**Who wrote what:** I made the design decisions: both signals' features and directions, the 30/70 weighting, the symmetric disagreement rule, both thresholds, all five criteria, the label wording, the rate limits, which attack outcome was the worst, which improvement to make, and the production trade. Claude wrote most of the code to implement them (`stylometry.py` including `readable_share`, the `/submit` and `/appeal` routes, `test_inputs.py`, and the Unit 8 scripts: `appeal_eval.py`, `eval_scores.py`, `attack_scores.py`, `pick_entries.py`, `signal_scores.py`, `feature_breakdown.py`), explained test results, drafted the README write ups from my decisions and the real output, and wrote the five chatbot responses used for criterion 3.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
@@ -652,7 +664,19 @@ Appeals, from `appeal_eval.py::run_trial` (trial 1):
 <!-- For each attack still getting through and each criterion still missed:
      what you'd do, and why you stopped. -->
 
-**The trade I'd make if this ran for real:**
+**Criterion 3 (AI text never reaches the AI label).** Still 0 of 5. What I'd do next is take word variety out of signal two, since it failed to separate AI from human writing in both Unit 7 and Unit 8. By my rough estimate, that would bring about 3 of my 5 chatbot responses over 0.85, which is better but still a miss, and it would also raise the style score of formal human writing, which is the false positive problem I built the 0.7 weight to avoid. I stopped because the unit allows one change, and I picked the one that fixed a wrong accusation over the one that would catch more AI.
+
+**Criterion 2 (score spread) holds by only 0.002.** The gap is 0.402 against a target of 0.40, and since the scores are deterministic, three trials don't show how fragile that is. I'd test it on 20 or more pieces on each side before trusting it. I stopped because the criterion technically holds, and more samples wouldn't change the system, only how confident I am in it.
+
+**FP05 (human technical documentation labeled AI at 0.854).** It misses the threshold by 0.004. Raising `AI_THRESHOLD` to 0.86 would fix it, but that's tuning to one sample, and it would push criterion 3 even further out of reach. The real problem is that signal two reads consistent writing as machine-like, and technical writing is consistent on purpose. I'd want signal two to measure something other than uniformity before touching the threshold. I stopped because this is the same signal two problem as criterion 3, and there was no single change that fixes one without making the other worse.
+
+**MF02 (one character crashes with a 500 and leaves no log entry).** The fix is in `app.py::submit`: reject text too short to score with a 400 and log it through `audit.log_rejection`, and wrap the scoring step so an unexpected error is logged instead of crashing. I stopped because I chose MF07 for my one change. MF02 is a crash on a nonsense input, while MF07 was a confident accusation against a real writer.
+
+**New, from my improvement:** text in a non-Latin script can never get a confident label in either direction, and putting emoji between the words of AI text would make signal two go neutral. Both are described under The Improvement.
+
+**Still open from the rate limiting section:** a script that changes `creator_id` on every request is never rate limited. A real fix needs accounts or a per-address limit alongside the per-writer one.
+
+**The trade I'd make if this ran for real:** I'd keep the AI threshold at 0.85 and accept that most AI text lands in "unsure," because a wrong accusation costs a real writer far more than a missed piece of AI text costs the site. The people who pay for that are honest writers competing against AI work that never gets flagged, and the site's reviewers, who can't rely on the label to catch AI and have to treat "unsure" as "not proven."
 
 <!-- Two sentences. Fewer wrong accusations means more AI text getting through.
      Say which way you'd go and WHO PAYS FOR IT. -->
