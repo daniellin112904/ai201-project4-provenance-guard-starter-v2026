@@ -96,6 +96,11 @@ SPREAD_RANGE = (0.15, 0.60)      # coefficient of variation
 VARIETY_RANGE = (0.60, 0.90)     # moving-average type-token ratio
 PUNCTUATION_FULL = 3             # this many kinds of mark counts as fully human
 
+# If fewer than this share of the text's words are ones words() can read
+# (Latin letters and digits), the three measures are measuring nothing.
+# Emoji and non-Latin scripts land here.
+MIN_READABLE_SHARE = 0.5
+
 
 def _scaled(value: float, low: float, high: float) -> float:
     return _clamp((value - low) / (high - low))
@@ -120,13 +125,33 @@ def style_measures(text: str) -> dict:
     }
 
 
+def readable_share(text: str) -> float:
+    """
+    Share of the whitespace-separated words that contain at least one Latin
+    letter or digit, the only characters words() can see. Emoji and Arabic
+    score 0.0; ordinary English scores close to 1.0.
+    """
+    tokens = text.split()
+    if not tokens:
+        return 0.0
+    readable = sum(1 for t in tokens if re.search(r"[A-Za-z0-9]", t))
+    return readable / len(tokens)
+
+
 def style_signal(text: str) -> float:
     """
     One 0 to 1 score from the three measures. Higher means more likely AI,
     matching detector.model_signal.
 
     The three human-ness scores are averaged with equal weight, then flipped.
+
+    If most of the text is something words() can't read, the measures have
+    nothing to measure, so the signal returns a neutral 0.5 instead of
+    treating "can't measure" as "looks like AI".
     """
+    if readable_share(text) < MIN_READABLE_SHARE:
+        return 0.5
+
     m = style_measures(text)
     humanness = (
         m["spread_humanness"]

@@ -464,19 +464,77 @@ Appeals, from `appeal_eval.py::run_trial` (trial 1):
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 
----
+**The pattern: two problems, not five.** Four of the five failures trace to signal two, `stylometry.py::style_signal`, which carries 0.7 of the weight in `combine_signals`. It misreads in both directions: it calls chatbot text half human, and it calls uniform or unreadable text AI. The fifth failure is in the route.
+
+| Failure                    | Stage                                | Model          | Style          | Gap          |
+| -------------------------- | ------------------------------------ | -------------- | -------------- | ------------ |
+| Criterion 3 (chatbot text) | Signal two, amplified by the weights | 0.819 to 0.903 | 0.578 to 0.697 | 0.20 to 0.29 |
+| FP05 (technical docs)      | Signal two                           | 0.800          | 0.877          | 0.077        |
+| MF06 (emoji)               | Signal two, and the route            | 0.997          | 0.833          | 0.164        |
+| MF07 (Arabic)              | Signal two, and the route            | 0.906          | 0.833          | 0.073        |
+| MF02 (one character)       | The route                            | none           | none           | none         |
+
+**Criterion 3 missed: chatbot text never reaches the AI label.** Signal one did its job and scored all five chatbot responses between 0.819 and 0.903. Signal two scored them only 0.578 to 0.697. I broke signal two into its three features (`feature_breakdown.py`): sentence length spread and punctuation correctly read the chatbot text as machine-like (four of the five used no varied punctuation at all), but word variety read it as very human. Word variety ranged from 0.771 to 0.895 for the chatbot text and 0.785 to 0.915 for my casual messages, so it doesn't separate the two at all, but it still counts for a third of signal two. That pulled signal two toward the middle, and because signal two carries 0.7 of the weight, it pulled every combined score down to between 0.664 and 0.746. The gaps were 0.20 to 0.29, just under the 0.3 disagreement line, so that rule never fired. This is partly the cost I chose in Unit 7: I leaned on signal two to protect formal human writers, and that also protects chatbot text. It's also the same word variety problem I found in Unit 7, where every input scored between 0.88 and 0.92.
+
+**FP05: human technical documentation labeled AI (0.854).** Both signals scored it high (0.800 and 0.877) with a gap of only 0.077, so the disagreement rule had nothing to catch. Technical writing is meant to be consistent, and consistency is exactly what signal two reads as machine-like. At 0.7 weight, its 0.877 put the score 0.004 over the 0.85 line. This is the blind spot I named for signal two in Unit 7: it can't tell a careful human from a machine.
+
+**MF06 and MF07: emoji and Arabic labeled AI (0.882 and 0.855). One cause.** Both got a style score of exactly 0.833. `stylometry.words()` only matches `[a-z0-9']`, so it finds zero words in emoji or Arabic text. Word variety and punctuation both come out as 0 humanness, sentence spread falls back to a neutral 0.5, and (0.5 + 0 + 0) / 3 = 0.167 humanness gives a style score of 0.833. Signal two can't measure this text, and it reports "can't measure" as "looks like AI." Signal one is an English model, and it was also confident on both (0.997 and 0.906), so the signals agreed and the disagreement rule couldn't step in. The route also never checks whether the text has anything signal two can read before scoring it.
+
+## **MF02: one character crashed with a 500 and left no log entry.** `app.py::submit` rejects missing, empty, non-string, and oversized text, but nothing too short to score. One character passes validation, `detector.model_signal` raises a `ValueError` because there isn't enough text to measure, and nothing in the route catches it. Flask returns a 500, and because the error happens before `audit.log_decision` runs, the request leaves no record. A writer gets a server error and nobody can tell afterwards that it happened.
 
 ## The Improvement
 
-**What I changed:**
+**What I changed:** Signal two now returns a neutral 0.5 when it can't read most of the text. A new function, `stylometry.py::readable_share`, splits the text on spaces and counts how many chunks contain at least one Latin letter or digit, the only characters `words()` can see. If that share is under `MIN_READABLE_SHARE` (0.5), `style_signal` returns 0.5 before computing any features. I used a share instead of a minimum word count so a short English message is still scored normally.
 
-**Which diagnosis pointed at it:**
+**Which diagnosis pointed at it:** MF06 and MF07, the two failures with one cause. Signal two found zero readable words in emoji and Arabic, and its features fell back to a style score of 0.833, so it reported "can't measure" as "looks like AI." MF07 is also the outcome I named as the worst in the Before run. With signal two neutral, the model signal (0.997 and 0.906) and signal two (0.5) now disagree by more than 0.3, so the disagreement rule I already had turns them into "unsure."
 
 ### Attack Run — After
 
-<!-- Same format. `run_attacks.py --label after` -->
+`python run_attacks.py --set attack_set --label after`, written to `results/attack_run_2026-11-17_0045_after.md`. Scores are from the audit log for the same run (`python attack_scores.py`, saved to `results/attack_scores_after.txt`). Same marking rules as Before.
 
-**Did it help, and how do I know:**
+| ID                 | Family            | Going for                                   | Status       | Guess      | Combined  | Mark                                       |
+| ------------------ | ----------------- | ------------------------------------------- | ------------ | ---------- | --------- | ------------------------------------------ |
+| EV01               | evasion           | typos raise word variety                    | 200          | unsure     | 0.500     | held (disagreement rule)                   |
+| EV02               | evasion           | broken-up sentences                         | 200          | unsure     | 0.500     | held (disagreement rule)                   |
+| EV03               | evasion           | pasted quotation                            | 200          | unsure     | 0.500     | held (disagreement rule)                   |
+| EV04               | evasion           | unusual words raise perplexity              | 200          | unsure     | 0.638     | held                                       |
+| EV05               | evasion           | heavy human editing pass                    | 200          | unsure     | 0.283     | held                                       |
+| EV06               | evasion           | one very long, one very short sentence      | 200          | unsure     | 0.445     | held                                       |
+| EV07               | evasion           | padding with punctuation                    | 200          | unsure     | 0.413     | held                                       |
+| EV08               | evasion           | text below the token window                 | 200          | unsure     | 0.500     | held (disagreement rule)                   |
+| EV09               | evasion           | human opening bolted on                     | 200          | unsure     | 0.513     | held                                       |
+| EV10               | evasion           | repeated stanza structure                   | 200          | ai         | 0.867     | held (caught)                              |
+| FP01               | false positive    | plain human writing                         | 200          | unsure     | 0.565     | held                                       |
+| FP02               | false positive    | formal register                             | 200          | unsure     | 0.743     | held                                       |
+| FP03               | false positive    | non-native English speaker                  | 200          | unsure     | 0.678     | held                                       |
+| FP04               | false positive    | student essay to a rubric                   | 200          | unsure     | 0.666     | held                                       |
+| **FP05**           | false positive    | technical documentation by a person         | 200          | **ai**     | **0.854** | **broke** (unchanged)                      |
+| FP06               | false positive    | formal letter template                      | 200          | unsure     | 0.500     | held (disagreement rule)                   |
+| FP07               | false positive    | deliberate repetition                       | 200          | unsure     | 0.731     | held                                       |
+| FP08               | false positive    | very short human submission                 | 200          | unsure     | 0.417     | held                                       |
+| PI01               | prompt injection  | instruction to ignore the check             | 200          | unsure     | 0.372     | held                                       |
+| PI02               | prompt injection  | fake system message                         | 200          | unsure     | 0.217     | held (0.017 above the human line)          |
+| PI03               | prompt injection  | instruction in the writer's voice           | 200          | unsure     | 0.389     | held                                       |
+| PI04               | prompt injection  | hostile label text                          | 200          | unsure     | 0.442     | held                                       |
+| PI05               | prompt injection  | inject fields into the audit log            | 200          | unsure     | 0.500     | held                                       |
+| PI06               | prompt injection  | instruction plus real human text            | 200          | unsure     | 0.549     | held                                       |
+| MF01               | malformed         | whitespace only                             | 400          |            |           | held                                       |
+| **MF02**           | malformed         | single character                            | **500**      |            |           | **broke** (unchanged, crash, no log entry) |
+| MF03               | malformed         | control characters                          | 200          | unsure     | 0.500     | held                                       |
+| MF04               | malformed         | punctuation only                            | 200          | unsure     | 0.500     | held                                       |
+| MF05               | malformed         | one very long word                          | 200          | unsure     | 0.500     | held                                       |
+| MF06               | malformed         | emoji only                                  | 200          | **unsure** | **0.500** | **held (was broke at 0.882)**              |
+| MF07               | malformed         | right-to-left script (Arabic)               | 200          | **unsure** | **0.500** | **held (was broke at 0.855)**              |
+| MF08               | malformed         | 60,000 characters                           | 400          |            |           | held                                       |
+| RQ01 to RQ12       | malformed request | missing fields, wrong types, bad JSON, etc. | 400 (all 12) |            |           | held                                       |
+| FL01_01 to FL01_08 | flood             | rate limit fails                            | 200          | unsure     | 0.500     | held                                       |
+| FL01_09 to FL01_12 | flood             | rate limit fails                            | 429          |            |           | held                                       |
+
+**Count: 54 held, 2 broke** (FP05, MF02). Before: 52 held, 4 broke.
+
+**Did it help, and how do I know:** Yes, for the two attacks it targeted, and it went through the mechanism I expected. MF06 and MF07 both now show a style score of exactly 0.500 in the audit log, a gap to the model score of 0.497 and 0.406, and a combined score of 0.500 from the disagreement rule. Every other attack has the same combined score as the Before run, so the change didn't move anything it wasn't meant to. My five criteria also came out identical (`python run_eval.py --label after`, `results/run_2026-11-17_0047_after.md`; `python appeal_eval.py --label after`, `results/appeals_2026-11-17_0048_after.md`), because all my test pieces are English and the new check never fires on them. Criterion 3 still misses and FP05 and MF02 still break, since this change doesn't touch them.
+
+**What it costs:** Text in a non-Latin script can now never get a confident label in either direction. With signal two fixed at 0.5, the combined score can only land between about 0.41 and 0.59, or get sent to 0.5 by the disagreement rule. An Arabic writer can't be falsely accused anymore, but they can't get a "human" label either, and AI-generated Arabic will never be caught. It also opens a new evasion route: putting an emoji between every word of AI text drops the readable share under 0.5 and makes signal two go neutral. Right now that gains an attacker nothing, since unedited AI text already lands at "unsure" (criterion 3). But if signal two got better at catching AI, this would be a way around it. I think it's the right trade, because a wrong "AI" label on someone's own language is worse than an "unsure" on everything in that language.
 
 <!-- Widening the unsure band usually fixes one problem and creates another.
      Reporting that trade honestly is worth full credit. -->

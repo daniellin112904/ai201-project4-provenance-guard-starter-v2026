@@ -4,7 +4,9 @@ import json
 with open("logs/audit.jsonl", encoding="utf-8") as f:
     entries = [json.loads(line) for line in f if line.strip()]
 
-run = [e for e in entries if e.get("timestamp", "") >= "2026-11-16T04:40"]
+import sys
+SINCE = sys.argv[1] if len(sys.argv) > 1 else "2026-11-16T04:40"  # default: the before run
+run = [e for e in entries if e.get("timestamp", "") >= SINCE]
 print(f"{'creator_id':<22} {'status':<10} {'guess':<7} {'model':>6} {'style':>6} {'comb':>6}  reason")
 for e in run:
     def fmt(x):
