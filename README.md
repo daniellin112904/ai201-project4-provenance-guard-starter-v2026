@@ -380,19 +380,72 @@ PASTE HERE
 
 <!-- Your five criteria across three trials. `run_eval.py --label before`. -->
 
-| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
-| --------- | ------ | ----- | ----- | ----- | ------- |
-| 1.        |        |       |       |       |         |
-| 2.        |        |       |       |       |         |
-| 3.        |        |       |       |       |         |
-| 4.        |        |       |       |       |         |
-| 5.        |        |       |       |       |         |
+**What I tested with** (`scenarios.py`):
 
-**Real output from one trial**, pasted as text, naming the file and function
-that produced it:
+- **Criterion 1:** 10 pieces of my own writing. The first 5 are formal: an email I sent the CS department asking to enroll in a course, and four written answers I gave during my AI201 projects. The last 5 are casual messages I typed in other chats. I left my typos in. The only edit was removing my student ID from the email.
+- **Criterion 2:** the same 5 casual messages.
+- **Criterion 3:** 5 unedited chatbot responses, written by Claude for this test, as plain paragraphs on everyday topics.
+- **Criterion 5:** the 10 bad bodies my criterion names: missing text, null, empty, whitespace only, a number, a list, an object, missing `creator_id`, empty `creator_id`, and 10,005 characters.
 
-```json
+`run_eval.py` can't test appeals, since an appeal needs a real `content_id`, so I wrote `appeal_eval.py` for criterion 4. `run_eval.py` also only prints labels, so `eval_scores.py` reads the scores for criteria 1 to 3 from the audit log with `audit.read_entries()`.
 
+```
+python appeal_eval.py --label before   ->  results/appeals_2026-11-16_2344_before.md
+python run_eval.py --label before      ->  results/run_2026-11-16_2346_before.md
+python eval_scores.py
+```
+
+| Criterion                        | Target                                              | Run 1                   | Run 2                   | Run 3                   | Verdict             |
+| -------------------------------- | --------------------------------------------------- | ----------------------- | ----------------------- | ----------------------- | ------------------- |
+| 1. False positives on my writing | At most 1 of 10 at 0.85+                            | 0 of 10 (highest 0.610) | 0 of 10 (highest 0.610) | 0 of 10 (highest 0.610) | **Holds**           |
+| 2. Score spread                  | Chatbot average at least 0.40 above casual          | 0.696 - 0.294 = 0.402   | 0.402                   | 0.402                   | **Holds, by 0.002** |
+| 3. AI text reaches the AI label  | At least 4 of 5 at 0.85+                            | 0 of 5 (highest 0.746)  | 0 of 5                  | 0 of 5                  | **Misses**          |
+| 4. Appeals                       | 10 of 10 valid appeals work, unknown id returns 404 | 10 of 10, 404           | 10 of 10, 404           | 10 of 10, 404           | **Holds**           |
+| 5. Bad input                     | 10 of 10 return 400 with no decision                | 10 of 10                | 10 of 10                | 10 of 10                | **Holds**           |
+
+1. **Holds.** `scoring.py::score_to_label` only gives `ai` at 0.85 or higher, and none of my pieces got close. My formal pieces scored higher than my casual ones (0.500 to 0.610 vs 0.182 to 0.370), the pattern I expected, but never near the threshold. Nine came back `unsure` and one `human`. Two landed at exactly 0.500, where the disagreement rule in `combine_signals` fired.
+2. **Holds by 0.002.** That's stable across trials but not robust. Swapping one casual piece could push it under 0.40.
+3. **Misses.** All five chatbot responses scored 0.664 to 0.746 and came back `unsure`.
+4. **Holds.** The `/appeal` route in `app.py` returned `under_review` 30 of 30 times. Each one added a new entry through `audit.log_appeal` with my reasoning, and the original decision entry was unchanged. A made up `content_id` returned 404 every trial.
+5. **Holds.** The validation in `app.py::submit` rejected all 10 bodies every trial: 30 rejections logged through `audit.log_rejection`, zero decisions. The two bodies with no usable `creator_id` are logged under `'unknown'` and `''`.
+
+**The three trials are identical** because GPT-2 and stylometry are deterministic, so the same text always gets the same score. The trials show the results are stable, not that they'd hold on different samples.
+
+**Real output from one trial**, pasted as text, naming the file and function that produced it:
+
+Labels, from `run_eval.py` (trial 1):
+
+```
+my own writing  (criterion 1)
+  trial 1: unsure, unsure, unsure, unsure, unsure, unsure, unsure, human, unsure, unsure
+casual human  (criterion 2)
+  trial 1: unsure, unsure, human, unsure, unsure
+chatbot responses  (criterion 3)
+  trial 1: unsure, unsure, unsure, unsure, unsure
+bad input  (criterion 5)
+  trial 1: no decision on all 10
+```
+
+Scores, from `eval_scores.py` reading `audit.read_entries()` (trial 1 column):
+
+```
+Criterion 1: my own writing
+  pieces 1 to 10: 0.500, 0.503, 0.527, 0.610, 0.500, 0.289, 0.370, 0.182, 0.360, 0.268
+  0/10 at 0.85 or higher
+
+Criterion 2: casual human average 0.294
+Criterion 3: chatbot responses
+  pieces 1 to 5: 0.677, 0.684, 0.664, 0.710, 0.746
+  average 0.696, 0/5 at 0.85 or higher
+Criterion 2 gap: 0.696 - 0.294 = 0.402
+
+Criterion 5: each eval_bad_ id has 3 rejections logged, 0 decisions
+```
+
+Appeals, from `appeal_eval.py::run_trial` (trial 1):
+
+```
+## Trial 1: 10/10 valid appeals passed, unknown content_id returned 404
 ```
 
 **Diagnoses**
